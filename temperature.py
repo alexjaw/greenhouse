@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 #
 # Measures temperature using w1 sensor DS18B20
+# This script is started from cron at boot
+#
 # http://www.electrokit.com/temperatursensor-vattentat-ds18b20.49197
 # Connections: Black = GND, Red = VDD, White = Data
 # rpi2 pinout
@@ -35,7 +37,7 @@ except Exception as e:
 #------------------------------------#
 
 T_CALIBRATION = 0.0  # TODO: calibrate!
-T_MAX = 25
+T_MAX = 28
 T_MIN = 10
 UPDATE_INTERVAL = 10 * 60  # seconds
 UPLOAD_TO_GMAIL = True
