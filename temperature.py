@@ -37,7 +37,7 @@ except Exception as e:
 #------------------------------------#
 
 T_CALIBRATION = 0.0  # TODO: calibrate!
-T_MAX = 28
+T_MAX = 30
 T_MIN = 10
 UPDATE_INTERVAL = 10 * 60  # seconds
 UPLOAD_TO_GMAIL = True
