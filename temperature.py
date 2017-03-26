@@ -2,27 +2,7 @@
 #
 # Measures temperature using w1 sensor DS18B20
 # This script is controlled by cron (for pi), there should be a backup of
-# the crontab in this folder. See Exploring Pi chaper 12
-# m h  dom mon dow   command
-# */10 * * * * /home/pi/python/rpi_gpio/temperature.py 2>&1
-#
-# Sensitive information, pwd, etc stored in the environment (.bashrc)
-# Observe that ". .bashrc" can be used to reread the .bashrc file
-# Use export PWD="\"<pwd with special characters>\""
-#
-# http://www.electrokit.com/temperatursensor-vattentat-ds18b20.49197
-# Connections: Black = GND, Red = VDD, White = Data
-# rpi2 pinout
-# http://www.jameco.com/Jameco/workshop/circuitnotes/raspberry-pi-circuit-note.html
-# Connection to rpi
-# http://www.reuk.co.uk/DS18B20-Temperature-Sensor-with-Raspberry-Pi.htm
-# In order to use w1 you need:
-# dtoverlay=w1-gpio in /boot/config.txt or for older linux
-# sudo modprobe w1-gpio && sudo modprobe w1_therm
-# w1 data:
-# ls -l /sys/bus/w1/devices/
-# cat /sys/bus/w1/devices/28-000007a6f1c4/w1_slave
-from ConfigParser import SafeConfigParser
+
 import datetime
 from email.mime.text import MIMEText
 import os
@@ -200,6 +180,7 @@ def main():
                 pass
         except Exception as e:
             logger.error('ERROR. thingspeak fail, {}'.format(e))
+            logger.info('API key: {}'.format(THINGSPEAK_APIKEY_W))
 
 
 if __name__ == '__main__':
