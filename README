@@ -1,0 +1,36 @@
+Measures temperature using w1 sensor DS18B20
+Requires the following packages:
+RPi.GPIO
+thingspeak
+
+In order to use w1 sensor you need add
+dtoverlay=w1-gpio in /boot/config.txt
+
+Logfile is /var/log/greenhouse/temperature.log
+So, such folder must be created and permissions must be given for
+the user. For example
+sudo mkdir /var/log/greenhouse
+sudo chown pi:pi /var/log/greenhouse
+
+This script is controlled by cron (for user pi), there should be a backup of
+the crontab in this folder. See Exploring Pi chaper 12
+# m h  dom mon dow   command
+*/10 * * * * <app path> 2>&1
+
+Sensitive information, pwd, etc stored in the environment (.bashrc)
+Observe that ". .bashrc" can be used to reread the .bashrc file
+Use:
+export PWD="\"<pwd with special characters>\""
+
+http://www.electrokit.com/temperatursensor-vattentat-ds18b20.49197
+Connections: Black = GND, Red = VDD, White = Data
+rpi2 pinout
+http://www.jameco.com/Jameco/workshop/circuitnotes/raspberry-pi-circuit-note.html
+Connection to rpi
+http://www.reuk.co.uk/DS18B20-Temperature-Sensor-with-Raspberry-Pi.htm
+In order to use w1 you need:
+dtoverlay=w1-gpio in /boot/config.txt or for older linux
+sudo modprobe w1-gpio && sudo modprobe w1_therm
+w1 data:
+ls -l /sys/bus/w1/devices/
+cat /sys/bus/w1/devices/28-000007a6f1c4/w1_slave

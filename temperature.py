@@ -1,7 +1,14 @@
 #!/usr/bin/env python
 #
 # Measures temperature using w1 sensor DS18B20
-# This script is started from cron at boot
+# This script is controlled by cron (for pi), there should be a backup of
+# the crontab in this folder. See Exploring Pi chaper 12
+# m h  dom mon dow   command
+# */10 * * * * /home/pi/python/rpi_gpio/temperature.py 2>&1
+#
+# Sensitive information, pwd, etc stored in the environment (.bashrc)
+# Observe that ". .bashrc" can be used to reread the .bashrc file
+# Use export PWD="\"<pwd with special characters>\""
 #
 # http://www.electrokit.com/temperatursensor-vattentat-ds18b20.49197
 # Connections: Black = GND, Red = VDD, White = Data
@@ -9,22 +16,27 @@
 # http://www.jameco.com/Jameco/workshop/circuitnotes/raspberry-pi-circuit-note.html
 # Connection to rpi
 # http://www.reuk.co.uk/DS18B20-Temperature-Sensor-with-Raspberry-Pi.htm
+# In order to use w1 you need:
+# dtoverlay=w1-gpio in /boot/config.txt or for older linux
+# sudo modprobe w1-gpio && sudo modprobe w1_therm
 # w1 data:
 # ls -l /sys/bus/w1/devices/
 # cat /sys/bus/w1/devices/28-000007a6f1c4/w1_slave
+from ConfigParser import SafeConfigParser
 import datetime
 from email.mime.text import MIMEText
+import os
 import smtplib
-import time
 
-import logging
 import logging.config
 
-HOME_DIR = '/home/pi/' + '/python/rpi_gpio/'
 
-LOGGING_CONF_FILE = HOME_DIR + 'logging.conf'
+HOME_DIR = os.path.dirname(os.path.realpath(__file__))
+
+LOGGING_CONF_FILE = os.path.join(HOME_DIR, 'logging.conf')
 logging.config.fileConfig(LOGGING_CONF_FILE, disable_existing_loggers=False)
 logger = logging.getLogger('temperature.py')
+
 
 try:
     import RPi.GPIO as GPIO
@@ -32,17 +44,38 @@ except Exception as e:
     log_err = 'WARNING. Failed importing RPi.GPIO'
     logger.error(log_err)
 
+try:
+    import thingspeak
+except Exception as e:
+    log_err = 'WARNING. Failed importing thingspeak'
+    logger.error(log_err)
+
 #------------------------------------#
 #               SETTINGS             #
 #------------------------------------#
 
+T_ERROR = -300
 T_CALIBRATION = 0.0  # TODO: calibrate!
 T_MAX = 30
-T_MIN = 10
-UPDATE_INTERVAL = 10 * 60  # seconds
-UPLOAD_TO_GMAIL = True
+T_MIN = 8
+#UPDATE_INTERVAL = 10 * 60  # seconds
+UPLOAD_TO_GMAIL = False
+UPLOAD_TO_THINGSPEAK = True
 W1 = '/sys/bus/w1/devices/28-000007a6f1c4/w1_slave'
 
+# GMAIL
+GMAIL_USER = 'rpi.bohmeraudio@gmail.com'
+GMAIL_PASS = os.environ.get('GMAIL_PASS')
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 587
+
+# THINGSPEAK
+# using: pip install thingspeak
+# or https://github.com/mchwalisz/thingspeak
+THINGSPEAK_APIKEY_W = os.environ.get('THINGSPEAK_APIKEY_W')
+THINGSPEAK_APIKEY_R = os.environ.get('THINGSPEAK_APIKEY_R')
+THINGSPEAK_CHANNEL = 109814
+THINGSPEAK_FIELD = 1  # Temperature
 #------------------------------------#
 #           END OF SETTING           #
 #------------------------------------#
@@ -52,10 +85,12 @@ def _print_start_information():
     logger.info('---------- Starting temperature logger... ----------')
     if UPLOAD_TO_GMAIL:
         logger.info('Gmail logging enabled')
+    elif UPLOAD_TO_THINGSPEAK:
+        logger.info('ThingSpeak logging enabled')
     else:
         logger.info('Gmail logging disabled')
 
-    logger.info('Updating interval [s] = %s', str(UPDATE_INTERVAL))
+    #logger.info('Updating interval [s] = %s', str(UPDATE_INTERVAL))
     logger.info('W1 sensor path = %s', W1)
 
 
@@ -67,10 +102,6 @@ def is_temp_ok(t):
 
 
 def _send_email(subject, msg):
-    GMAIL_USER = 'rpi.bohmeraudio@gmail.com'
-    GMAIL_PASS = 'rpi+dsp=fun'
-    SMTP_SERVER = 'smtp.gmail.com'
-    SMTP_PORT = 587
     #logger.info('Starting to send email...')
     smtpserver = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
     smtpserver.ehlo()
@@ -126,23 +157,50 @@ def upload_log(data):
         logger.error(msg)
 
 
-def worker(sleep_time):
-    _print_start_information()
-    while True:
-        try:
-            temp = measure_temp()
-        except Exception as e:
-            msg = 'ERROR. Failed getting temp' + str(e)
-            logger.info(msg)
-        else:
-            if not is_temp_ok(temp):
-                msg = 'WARNING. Temp = ' + str(temp)
-            else:
-                msg = 'Temp is ok, temp =  ' + str(temp)
+def upload_to_thingspeak(data):
+    '''
+    Update thingspeak channel with data
+    :param ch: thingspeak channel object
+    :param data: float
+    :return:
+    '''
+    ch = thingspeak.Channel(id=THINGSPEAK_CHANNEL, write_key=THINGSPEAK_APIKEY_W)
+    msg = {}
+    msg[THINGSPEAK_FIELD] = data
+    return ch.update(msg)
 
+
+def main():
+    #_print_start_information()
+    temp = T_ERROR
+    try:
+        temp = measure_temp()
+    except Exception as e:
+        msg = 'ERROR. Failed getting temp' + str(e)
         logger.info(msg)
-        if UPLOAD_TO_GMAIL:
+    else:
+        if not is_temp_ok(temp):
+            msg = 'WARNING. Temp = ' + str(temp)
+        else:
+            msg = 'Temp is ok, temp =  ' + str(temp)
+
+    logger.info(msg)
+    if UPLOAD_TO_GMAIL:
+        try:
             upload_log(msg)
+        except Exception as e:
+            logger.error('ERROR. gmail fail, {}'.format(e))
 
-        time.sleep(sleep_time)
+    elif UPLOAD_TO_THINGSPEAK:
+        try:
+            if temp != T_ERROR:
+                logger.info('RECV: {}'.format(upload_to_thingspeak(temp)))
+            else:
+                # do something when temperature error
+                pass
+        except Exception as e:
+            logger.error('ERROR. thingspeak fail, {}'.format(e))
 
+
+if __name__ == '__main__':
+    main()
